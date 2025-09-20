@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>🍅 Pomodoro Timer</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            'pomodoro-red': '#dc2626',
+                            'break-green': '#16a34a',
+                            'long-break-blue': '#2563eb'
+                        }
+                    }
+                }
+            }
+        </script>
+        <style>
+            .session-work {
+                background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            }
+            .session-shortBreak {
+                background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+            }
+            .session-longBreak {
+                background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            }
+            .progress-bar {
+                transition: width 0.3s ease;
+                background: linear-gradient(90deg, #ef4444, #dc2626);
+            }
+            .session-shortBreak .progress-bar {
+                background: linear-gradient(90deg, #22c55e, #16a34a);
+            }
+            .session-longBreak .progress-bar {
+                background: linear-gradient(90deg, #3b82f6, #2563eb);
+            }
+        </style>
+    </head>
+    <body class="session-work min-h-screen flex items-center justify-center p-4 transition-all duration-500">
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">⚙️ Settings</h3>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Work Duration (minutes)</label>
+                        <input type="number" id="work-duration" min="1" max="60" class="w-full border rounded px-3 py-2" value="25">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Short Break (minutes)</label>
+                        <input type="number" id="short-break-duration" min="1" max="30" class="w-full border rounded px-3 py-2" value="5">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Long Break (minutes)</label>
+                        <input type="number" id="long-break-duration" min="1" max="60" class="w-full border rounded px-3 py-2" value="15">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Pomodoros until Long Break</label>
+                        <input type="number" id="sessions-until-long-break" min="2" max="10" class="w-full border rounded px-3 py-2" value="4">
+                    </div>
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="checkbox" id="auto-start-breaks" class="mr-2">
+                            <span class="text-sm text-gray-700">Auto-start breaks</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="auto-start-pomodoros" class="mr-2">
+                            <span class="text-sm text-gray-700">Auto-start work sessions</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="enable-notifications" class="mr-2" checked>
+                            <span class="text-sm text-gray-700">Enable notifications</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="enable-sounds" class="mr-2" checked>
+                            <span class="text-sm text-gray-700">Enable sounds</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 mt-6">
+                    <button id="cancel-settings" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                    <button id="save-settings" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600">Save</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Timer Card -->
+        <main class="flex flex-col items-center bg-white rounded-lg border-b-4 border-red-500 w-full max-w-md p-6 font-mono text-red-600 font-bold shadow-lg gap-4 relative">
+            <!-- Settings Button -->
+            <button id="settings-btn" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600" aria-label="settings">
+                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" class="fill-current">
+                    <path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-1 13.5l103 78-110 190-119-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 41q-22-23-48.5-38.5T533-694l-14-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 65q-5 14-7 29.5t-2 31.5q0 16 2 31.5t7 29.5l-86 65 39 68 99-41q22 23 48.5 38.5T427-266l14 106Zm40-320q33 0 56.5 23.5T560-400q0 33-23.5 56.5T480-320q-33 0-56.5-23.5T400-400q0-33 23.5-56.5T480-480Zm0 80Z"/>
+                </svg>
+            </button>
+
+            <!-- Session Title -->
+            <h2 id="session-title" class="text-2xl sm:text-3xl text-center">🍅 Focus Time!</h2>
+            
+            <!-- Progress Bar -->
+            <div class="w-full bg-gray-200 rounded-full h-2 mb-2">
+                <div id="progress-bar" class="progress-bar h-2 rounded-full" style="width: 0%"></div>
+            </div>
+            
+            <!-- Timer Display -->
+            <h1 id="time-display" class="text-6xl sm:text-7xl lg:text-8xl">25:00</h1>
+            
+            <!-- Session Counter -->
+            <p id="session-counter" class="text-sm text-gray-600 font-normal">Completed: 0</p>
+            
+            <!-- Control Buttons -->
+            <section class="flex gap-4 items-center">
+                <button id="reset-btn" class="p-2 text-gray-500 hover:text-red-500 transition-colors" aria-label="reset">
+                    <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="35px">
+                        <path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/>
+                    </svg>
+                </button>
+                
+                <button id="play-pause-btn" class="p-3 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg" aria-label="play">
+                    <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="35px">
+                        <path d="M320-200v-560l440 280-440 280Z"/>
+                    </svg>
+                </button>
+                
+                <button id="skip-btn" class="p-2 text-gray-500 hover:text-red-500 transition-colors" aria-label="skip">
+                    <svg class="fill-current" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="35px">
+                        <path d="M100-240v-480l360 240-360 240Zm400 0v-480l360 240-360 240Z"/>
+                    </svg>
+                </button>
+            </section>
+            
+            <!-- Keyboard Shortcuts Info -->
+            <div class="text-xs text-gray-500 font-normal text-center mt-2">
+                <p>Shortcuts: <kbd class="bg-gray-100 px-1 rounded">Space</kbd> play/pause • <kbd class="bg-gray-100 px-1 rounded">Ctrl+R</kbd> reset • <kbd class="bg-gray-100 px-1 rounded">Ctrl+S</kbd> skip</p>
+            </div>
+        </main>
+        
+        <script src="script.js"></script>
+    </body>
+</html>
