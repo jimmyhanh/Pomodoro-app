@@ -1,58 +1,92 @@
-class PomodoroTimer {
+/**
+ * Main PomodoroApp Class - Coordinates all components
+ * Uses Timer, Settings, Display, Notifications, and SessionManager components
+ */
+class PomodoroApp {
     constructor() {
-        // Timer settings (in minutes)
-        this.settings = {
-            workDuration: 25,
-            shortBreakDuration: 5,
-            longBreakDuration: 15,
-            sessionsUntilLongBreak: 4,
-            autoStartBreaks: false,
-            autoStartPomodoros: false,
-            enableNotifications: true,
-            enableSounds: true
-        };
+        // Initialize components
+        this.timer = new Timer();
+        this.settings = new Settings();
+        this.display = new Display();
+        this.notifications = new Notifications();
+        this.sessionManager = new SessionManager();
 
-        // Timer state
-        this.currentTime = this.settings.workDuration * 60; // in seconds
-        this.isRunning = false;
-        this.isPaused = false;
-        this.currentSession = 'work'; // 'work', 'shortBreak', 'longBreak'
-        this.sessionCount = 0;
-        this.completedPomodoros = 0;
-        this.timer = null;
-
-        // DOM elements
-        this.timeDisplay = document.getElementById('time-display');
-        this.sessionTitle = document.getElementById('session-title');
-        this.playPauseBtn = document.getElementById('play-pause-btn');
-        this.resetBtn = document.getElementById('reset-btn');
-        this.skipBtn = document.getElementById('skip-btn');
-        this.settingsBtn = document.getElementById('settings-btn');
-        this.progressBar = document.getElementById('progress-bar');
-        this.sessionCounter = document.getElementById('session-counter');
-        this.settingsModal = document.getElementById('settings-modal');
-
-        this.initializeEventListeners();
-        this.updateDisplay();
-        this.requestNotificationPermission();
+        // Initialize the app
+        this.initialize();
     }
 
+    /**
+     * Initialize the application
+     */
+    initialize() {
+        // Setup component interconnections
+        this.setupComponentCallbacks();
+        
+        // Initialize components with settings
+        this.sessionManager.initialize(this.settings.getSettings());
+        
+        // Setup event listeners
+        this.initializeEventListeners();
+        
+        // Set initial timer duration
+        const initialDuration = this.sessionManager.getCurrentSessionDuration();
+        this.timer.setDuration(initialDuration);
+        
+        // Update display
+        this.updateAllDisplays();
+        
+        // Request notification permission
+        this.notifications.requestPermission();
+    }
+
+    /**
+     * Setup callbacks between components
+     */
+    setupComponentCallbacks() {
+        // Timer callbacks
+        this.timer.onTick = (currentTime) => {
+            this.updateAllDisplays();
+        };
+
+        this.timer.onComplete = () => {
+            this.handleSessionComplete();
+        };
+
+        // Settings callbacks
+        this.settings.onSettingsChange = (newSettings) => {
+            this.handleSettingsChange(newSettings);
+        };
+
+        // Session manager callbacks
+        this.sessionManager.onSessionChange = (sessionType, sessionInfo) => {
+            this.handleSessionChange(sessionInfo);
+        };
+
+        this.sessionManager.onSessionComplete = (sessionInfo) => {
+            this.handleSessionTransition(sessionInfo);
+        };
+    }
+
+    /**
+     * Initialize event listeners
+     */
     initializeEventListeners() {
-        this.playPauseBtn.addEventListener('click', () => this.toggleTimer());
-        this.resetBtn.addEventListener('click', () => this.resetTimer());
-        this.skipBtn.addEventListener('click', () => this.skipSession());
-        this.settingsBtn.addEventListener('click', () => this.openSettings());
-        
-        // Settings modal events
-        document.getElementById('cancel-settings').addEventListener('click', () => this.closeSettings());
-        document.getElementById('save-settings').addEventListener('click', () => this.saveSettings());
-        
-        // Close modal when clicking outside
-        this.settingsModal.addEventListener('click', (e) => {
-            if (e.target === this.settingsModal) {
-                this.closeSettings();
-            }
-        });
+        // Control buttons
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const skipBtn = document.getElementById('skip-btn');
+
+        if (playPauseBtn) {
+            playPauseBtn.addEventListener('click', () => this.toggleTimer());
+        }
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => this.resetTimer());
+        }
+
+        if (skipBtn) {
+            skipBtn.addEventListener('click', () => this.skipSession());
+        }
         
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -65,8 +99,6 @@ class PomodoroTimer {
             } else if (e.code === 'KeyS' && e.ctrlKey) {
                 e.preventDefault();
                 this.skipSession();
-            } else if (e.code === 'Escape') {
-                this.closeSettings();
             }
         });
 
@@ -76,264 +108,180 @@ class PomodoroTimer {
                 e.preventDefault();
             }
         });
+
+        // Resume audio context on first user interaction
+        document.addEventListener('click', () => {
+            this.notifications.resumeAudioContext();
+        }, { once: true });
     }
 
+    /**
+     * Toggle timer between start and pause
+     */
     toggleTimer() {
-        if (this.isRunning) {
-            this.pauseTimer();
-        } else {
-            this.startTimer();
-        }
+        this.timer.toggle();
+        this.updateAllDisplays();
     }
 
+    /**
+     * Start the timer
+     */
     startTimer() {
-        this.isRunning = true;
-        this.isPaused = false;
-        
-        this.timer = setInterval(() => {
-            this.currentTime--;
-            this.updateDisplay();
-            
-            if (this.currentTime <= 0) {
-                this.completeSession();
-            }
-        }, 1000);
-
-        this.updatePlayPauseButton();
+        this.timer.start();
+        this.updateAllDisplays();
     }
 
+    /**
+     * Pause the timer
+     */
     pauseTimer() {
-        this.isRunning = false;
-        this.isPaused = true;
-        clearInterval(this.timer);
-        this.updatePlayPauseButton();
+        this.timer.pause();
+        this.updateAllDisplays();
     }
 
+    /**
+     * Reset the timer to current session duration
+     */
     resetTimer() {
-        this.isRunning = false;
-        this.isPaused = false;
-        clearInterval(this.timer);
-        
-        // Reset to current session duration
-        this.currentTime = this.getSessionDuration(this.currentSession);
-        this.updateDisplay();
-        this.updatePlayPauseButton();
+        const currentDuration = this.sessionManager.getCurrentSessionDuration();
+        this.timer.reset(currentDuration);
+        this.updateAllDisplays();
     }
 
+    /**
+     * Skip to the next session
+     */
     skipSession() {
-        this.pauseTimer();
-        this.completeSession();
+        this.timer.stop();
+        this.handleSessionComplete();
     }
 
-    completeSession() {
-        this.pauseTimer();
+    /**
+     * Handle session completion
+     */
+    handleSessionComplete() {
+        const currentSessionInfo = this.sessionManager.getCurrentSessionInfo();
         
-        // Play completion sound
-        if (this.settings.enableSounds) {
-            this.playNotificationSound();
+        // Play completion sound and send notification
+        if (this.settings.getSetting('enableSounds')) {
+            this.notifications.playSound('completion');
         }
 
-        // Send notification
-        if (this.settings.enableNotifications) {
-            this.sendNotification();
+        if (this.settings.getSetting('enableNotifications')) {
+            this.notifications.notifySessionComplete(currentSessionInfo.type);
         }
 
-        // Update session count and determine next session
-        if (this.currentSession === 'work') {
-            this.completedPomodoros++;
-            this.sessionCount++;
-            
-            if (this.sessionCount % this.settings.sessionsUntilLongBreak === 0) {
-                this.currentSession = 'longBreak';
-            } else {
-                this.currentSession = 'shortBreak';
-            }
-        } else {
-            this.currentSession = 'work';
-        }
-
-        // Set time for next session
-        this.currentTime = this.getSessionDuration(this.currentSession);
-        this.updateDisplay();
+        // Complete the session and get next session info
+        const sessionInfo = this.sessionManager.completeSession();
+        
+        // Set timer for next session
+        this.timer.setDuration(sessionInfo.duration);
+        
+        // Update displays
+        this.updateAllDisplays();
 
         // Auto-start next session if enabled
-        if ((this.currentSession !== 'work' && this.settings.autoStartBreaks) ||
-            (this.currentSession === 'work' && this.settings.autoStartPomodoros)) {
-            setTimeout(() => this.startTimer(), 1000);
+        if (sessionInfo.shouldAutoStart) {
+            setTimeout(() => {
+                this.timer.start();
+                this.updateAllDisplays();
+                
+                // Notify about session start
+                if (this.settings.getSetting('enableNotifications')) {
+                    this.notifications.notifySessionStart(sessionInfo.currentSession);
+                }
+            }, 1000);
         }
     }
 
-    getSessionDuration(sessionType) {
-        switch (sessionType) {
-            case 'work':
-                return this.settings.workDuration * 60;
-            case 'shortBreak':
-                return this.settings.shortBreakDuration * 60;
-            case 'longBreak':
-                return this.settings.longBreakDuration * 60;
-            default:
-                return this.settings.workDuration * 60;
+    /**
+     * Handle session change
+     */
+    handleSessionChange(sessionInfo) {
+        this.updateAllDisplays();
+    }
+
+    /**
+     * Handle session transition
+     */
+    handleSessionTransition(sessionInfo) {
+        // This is called when a session completes
+        // Additional logic can be added here if needed
+    }
+
+    /**
+     * Handle settings change
+     */
+    handleSettingsChange(newSettings) {
+        // Update session manager with new settings
+        this.sessionManager.updateSettings(newSettings);
+        
+        // Update notifications settings
+        this.notifications.setNotificationsEnabled(newSettings.enableNotifications);
+        this.notifications.setSoundEnabled(newSettings.enableSounds);
+        
+        // If timer is not running, update duration for current session
+        if (!this.timer.getState().isRunning) {
+            const newDuration = this.sessionManager.getCurrentSessionDuration();
+            this.timer.setDuration(newDuration);
+            this.updateAllDisplays();
         }
     }
 
-    updateDisplay() {
-        // Update time display
-        const minutes = Math.floor(this.currentTime / 60);
-        const seconds = this.currentTime % 60;
-        this.timeDisplay.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    /**
+     * Update all display elements
+     */
+    updateAllDisplays() {
+        const timerState = this.timer.getState();
+        const sessionInfo = this.sessionManager.getCurrentSessionInfo();
+        const statistics = this.sessionManager.getStatistics();
 
-        // Update session title
-        const sessionTitles = {
-            work: '🍅 Focus Time!',
-            shortBreak: '☕ Short Break',
-            longBreak: '🎉 Long Break'
+        // Update display component
+        this.display.updateAll({
+            currentTime: timerState.currentTime,
+            totalDuration: sessionInfo.duration,
+            sessionType: sessionInfo.type,
+            completedPomodoros: statistics.completedPomodoros,
+            isRunning: timerState.isRunning
+        });
+    }
+
+    /**
+     * Get current app state for debugging
+     */
+    getState() {
+        return {
+            timer: this.timer.getState(),
+            session: this.sessionManager.getCurrentSessionInfo(),
+            statistics: this.sessionManager.getStatistics(),
+            settings: this.settings.getSettings(),
+            notifications: this.notifications.getSettings()
         };
-        this.sessionTitle.textContent = sessionTitles[this.currentSession];
-
-        // Update progress bar
-        const totalDuration = this.getSessionDuration(this.currentSession);
-        const progress = ((totalDuration - this.currentTime) / totalDuration) * 100;
-        if (this.progressBar) {
-            this.progressBar.style.width = `${progress}%`;
-        }
-
-        // Update session counter
-        if (this.sessionCounter) {
-            this.sessionCounter.textContent = `Completed: ${this.completedPomodoros}`;
-        }
-
-        // Update document title
-        const titleMinutes = Math.floor(this.currentTime / 60);
-        const titleSeconds = this.currentTime % 60;
-        document.title = `${titleMinutes.toString().padStart(2, '0')}:${titleSeconds.toString().padStart(2, '0')} - ${sessionTitles[this.currentSession]}`;
-
-        // Update body class for styling
-        document.body.className = document.body.className.replace(/session-\w+/g, '');
-        document.body.classList.add(`session-${this.currentSession}`);
     }
 
-    updatePlayPauseButton() {
-        const playIcon = `<svg class="fill-current" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="35px"><path d="M320-200v-560l440 280-440 280Z"/></svg>`;
-        const pauseIcon = `<svg class="fill-current" xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="35px"><path d="M560-200v-560h160v560H560Zm-320 0v-560h160v560H240Z"/></svg>`;
+    /**
+     * Reset the entire application
+     */
+    resetApp() {
+        this.timer.stop();
+        this.sessionManager.resetToDefaults();
+        this.sessionManager.resetCounters();
         
-        this.playPauseBtn.innerHTML = this.isRunning ? pauseIcon : playIcon;
-        this.playPauseBtn.setAttribute('aria-label', this.isRunning ? 'pause' : 'play');
-    }
-
-    async requestNotificationPermission() {
-        if ('Notification' in window && Notification.permission === 'default') {
-            await Notification.requestPermission();
-        }
-    }
-
-    sendNotification() {
-        if ('Notification' in window && Notification.permission === 'granted') {
-            const sessionMessages = {
-                work: '🍅 Time to focus! Work session starting.',
-                shortBreak: '☕ Take a short break! You\'ve earned it.',
-                longBreak: '🎉 Long break time! Great job on completing a cycle.'
-            };
-
-            new Notification('Pomodoro Timer', {
-                body: sessionMessages[this.currentSession],
-                icon: '/favicon.ico',
-                badge: '/favicon.ico'
-            });
-        }
-    }
-
-    playNotificationSound() {
-        // Create a simple beep sound using Web Audio API
-        try {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-            oscillator.type = 'sine';
-
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.5);
-        } catch (error) {
-            console.log('Could not play notification sound:', error);
-        }
-    }
-
-    // Settings management
-    updateSettings(newSettings) {
-        this.settings = { ...this.settings, ...newSettings };
+        const initialDuration = this.sessionManager.getCurrentSessionDuration();
+        this.timer.setDuration(initialDuration);
         
-        // If we're not running and current session duration changed, update current time
-        if (!this.isRunning) {
-            this.currentTime = this.getSessionDuration(this.currentSession);
-            this.updateDisplay();
-        }
-        
-        // Save to localStorage
-        localStorage.setItem('pomodoroSettings', JSON.stringify(this.settings));
+        this.updateAllDisplays();
     }
 
-    loadSettings() {
-        const saved = localStorage.getItem('pomodoroSettings');
-        if (saved) {
-            this.settings = { ...this.settings, ...JSON.parse(saved) };
-        }
-    }
-
-    // Settings UI methods
-    openSettings() {
-        this.populateSettingsForm();
-        this.settingsModal.classList.remove('hidden');
-    }
-
-    closeSettings() {
-        this.settingsModal.classList.add('hidden');
-    }
-
-    populateSettingsForm() {
-        document.getElementById('work-duration').value = this.settings.workDuration;
-        document.getElementById('short-break-duration').value = this.settings.shortBreakDuration;
-        document.getElementById('long-break-duration').value = this.settings.longBreakDuration;
-        document.getElementById('sessions-until-long-break').value = this.settings.sessionsUntilLongBreak;
-        document.getElementById('auto-start-breaks').checked = this.settings.autoStartBreaks;
-        document.getElementById('auto-start-pomodoros').checked = this.settings.autoStartPomodoros;
-        document.getElementById('enable-notifications').checked = this.settings.enableNotifications;
-        document.getElementById('enable-sounds').checked = this.settings.enableSounds;
-    }
-
-    saveSettings() {
-        const newSettings = {
-            workDuration: parseInt(document.getElementById('work-duration').value),
-            shortBreakDuration: parseInt(document.getElementById('short-break-duration').value),
-            longBreakDuration: parseInt(document.getElementById('long-break-duration').value),
-            sessionsUntilLongBreak: parseInt(document.getElementById('sessions-until-long-break').value),
-            autoStartBreaks: document.getElementById('auto-start-breaks').checked,
-            autoStartPomodoros: document.getElementById('auto-start-pomodoros').checked,
-            enableNotifications: document.getElementById('enable-notifications').checked,
-            enableSounds: document.getElementById('enable-sounds').checked
-        };
-
-        this.updateSettings(newSettings);
-        this.closeSettings();
-    }
-
-    // Initialize the app
-    init() {
-        this.loadSettings();
-        this.currentTime = this.getSessionDuration(this.currentSession);
-        this.updateDisplay();
-        this.updatePlayPauseButton();
+    /**
+     * Get app statistics
+     */
+    getStatistics() {
+        return this.sessionManager.getStatistics();
     }
 }
 
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    window.pomodoroTimer = new PomodoroTimer();
-    window.pomodoroTimer.init();
+    window.pomodoroApp = new PomodoroApp();
 });

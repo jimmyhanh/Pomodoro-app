@@ -18,27 +18,7 @@
                 }
             }
         </script>
-        <style>
-            .session-work {
-                background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-            }
-            .session-shortBreak {
-                background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-            }
-            .session-longBreak {
-                background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-            }
-            .progress-bar {
-                transition: width 0.3s ease;
-                background: linear-gradient(90deg, #ef4444, #dc2626);
-            }
-            .session-shortBreak .progress-bar {
-                background: linear-gradient(90deg, #22c55e, #16a34a);
-            }
-            .session-longBreak .progress-bar {
-                background: linear-gradient(90deg, #3b82f6, #2563eb);
-            }
-        </style>
+        <link rel="stylesheet" href="styles.css">
     </head>
     <body class="session-work min-h-screen flex items-center justify-center p-4 transition-all duration-500">
         <!-- Settings Modal -->
@@ -138,6 +118,13 @@
             </div>
         </main>
         
+        <!-- Load components in dependency order -->
+        <script src="components/Timer.js"></script>
+        <script src="components/Settings.js"></script>
+        <script src="components/Display.js"></script>
+        <script src="components/Notifications.js"></script>
+        <script src="components/SessionManager.js"></script>
+        <!-- Load main app last -->
         <script src="script.js"></script>
     </body>
 </html>
